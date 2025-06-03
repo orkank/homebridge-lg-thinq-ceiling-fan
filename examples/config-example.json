@@ -1,0 +1,34 @@
+{
+  "bridge": {
+    "name": "Homebridge",
+    "username": "00:00:00:00:00:00",
+    "port": 51826,
+    "pin": "000-00-000"
+  },
+  "platforms": [
+    {
+      "name": "LG Ceiling Fan",
+      "platform": "LGCeilingFan",
+      "auth_mode": "token",
+      "refresh_token": "your_lg_thinq_refresh_token_here",
+      "country": "US",
+      "language": "en-US",
+      "devices": [
+        {
+          "id": "your_device_id_1",
+          "name": "Master Bedroom Fan",
+          "model": "LG Ceiling Fan Pro",
+          "max_speed": 4
+        },
+        {
+          "id": "your_device_id_2",
+          "name": "Living Room Fan",
+          "model": "LG Ceiling Fan Basic",
+          "max_speed": 4
+        }
+      ],
+      "polling_interval": 30,
+      "debug": false
+    }
+  ]
+}

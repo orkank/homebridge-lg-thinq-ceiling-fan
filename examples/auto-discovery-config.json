@@ -1,0 +1,22 @@
+{
+  "bridge": {
+    "name": "Homebridge",
+    "username": "00:00:00:00:00:00",
+    "port": 51826,
+    "pin": "000-00-000"
+  },
+  "platforms": [
+    {
+      "name": "LG Ceiling Fan",
+      "platform": "LGCeilingFan",
+      "auth_mode": "token",
+      "refresh_token": "your_lg_thinq_refresh_token_here",
+      "country": "US",
+      "language": "en-US",
+      "_comment": "Leave devices array empty or omit it completely for auto-discovery",
+      "devices": [],
+      "polling_interval": 30,
+      "debug": true
+    }
+  ]
+}

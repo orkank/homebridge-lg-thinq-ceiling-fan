@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LG Ceiling Fan Plugin Settings</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .auth-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .status-message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .spinner-border-sm {
+            width: 1rem;
+            height: 1rem;
+        }
+        .device-item {
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            background: white;
+        }
+        .device-online {
+            border-left: 4px solid #28a745;
+        }
+        .device-offline {
+            border-left: 4px solid #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid p-4">
+        <h2 class="mb-4">
+            <i class="fas fa-fan"></i>
+            LG Ceiling Fan Plugin Configuration
+        </h2>
+
+        <!-- Authentication Section -->
+        <div class="auth-section">
+            <h4 class="mb-3">
+                <i class="fas fa-key"></i>
+                LG ThinQ Authentication
+            </h4>
+
+            <div id="statusMessage"></div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="country" class="form-label">Country Code</label>
+                        <input type="text" class="form-control" id="country" value="US" placeholder="e.g., US, TR, KR" required>
+                        <div class="form-text">Enter your country code (2 letters, must be uppercase)</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="language" class="form-label">Language Code</label>
+                        <input type="text" class="form-control" id="language" value="en-US" placeholder="e.g., en-US, tr-TR, ko-KR" required>
+                        <div class="form-text">Enter your language code (e.g., en-US)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">LG ThinQ Username</label>
+                        <input type="email" class="form-control" id="username" value="" placeholder="your.email@example.com" required>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label for="password" class="form-label">LG ThinQ Password</label>
+                        <input type="password" class="form-control" id="password" placeholder="Your password" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <button id="authenticateBtn" class="btn btn-primary">
+                    <span id="authSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    <i id="authIcon" class="fas fa-sign-in-alt me-2"></i>
+                    Login & Get Refresh Token
+                </button>
+                <button id="testTokenBtn" class="btn btn-outline-secondary ms-2" disabled>
+                    <i class="fas fa-check me-2"></i>
+                    Test Current Token
+                </button>
+            </div>
+
+            <div class="mb-3">
+                <label for="refreshToken" class="form-label">Refresh Token</label>
+                <div class="input-group">
+                    <input type="text" class="form-control" id="refreshToken" placeholder="Refresh token will appear here after authentication" readonly>
+                    <button class="btn btn-outline-secondary" type="button" id="copyTokenBtn" disabled>
+                        <i class="fas fa-copy"></i>
+                        Copy
+                    </button>
+                </div>
+                <div class="form-text">
+                    This token will be automatically saved to your configuration when you click "Save" below.
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Discovery Section -->
+        <div class="auth-section" id="deviceSection" style="display: none;">
+            <h4 class="mb-3">
+                <i class="fas fa-search"></i>
+                Device Discovery
+            </h4>
+
+            <div class="mb-3">
+                <button id="discoverBtn" class="btn btn-success">
+                    <span id="discoverSpinner" class="spinner-border spinner-border-sm d-none" role="status"></span>
+                    <i id="discoverIcon" class="fas fa-search me-2"></i>
+                    Discover Ceiling Fans
+                </button>
+            </div>
+
+            <div id="devicesList"></div>
+        </div>
+
+        <!-- Save Configuration Section -->
+        <div class="auth-section">
+            <h4 class="mb-3">
+                <i class="fas fa-save"></i>
+                Save Configuration
+            </h4>
+
+            <div class="mb-3">
+                <button id="saveConfigBtn" class="btn btn-success" disabled>
+                    <i class="fas fa-save me-2"></i>
+                    Save Configuration
+                </button>
+                <div class="form-text">
+                    This will save the refresh token and device configuration to Homebridge.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+    <script>
+        class LGCeilingFanUI {
+            constructor() {
+                this.refreshToken = null;
+                this.devices = [];
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.loadSavedConfig();
+            }
+
+            bindEvents() {
+                document.getElementById('authenticateBtn').addEventListener('click', () => this.authenticate());
+                document.getElementById('testTokenBtn').addEventListener('click', () => this.testToken());
+                document.getElementById('discoverBtn').addEventListener('click', () => this.discoverDevices());
+                document.getElementById('copyTokenBtn').addEventListener('click', () => this.copyToken());
+                document.getElementById('saveConfigBtn').addEventListener('click', () => this.saveConfiguration());
+            }
+
+            async loadSavedConfig() {
+                try {
+                    const config = await homebridge.request('/config');
+                    if (config.refresh_token) {
+                        document.getElementById('refreshToken').value = config.refresh_token;
+                        this.refreshToken = config.refresh_token;
+                        document.getElementById('testTokenBtn').disabled = false;
+                        document.getElementById('copyTokenBtn').disabled = false;
+                        document.getElementById('saveConfigBtn').disabled = false;
+                        document.getElementById('deviceSection').style.display = 'block';
+                    }
+                    if (config.country) document.getElementById('country').value = config.country;
+                    if (config.language) document.getElementById('language').value = config.language;
+                } catch (error) {
+                    console.error('Failed to load saved config:', error);
+                }
+            }
+
+            showMessage(message, type = 'info') {
+                const messageDiv = document.getElementById('statusMessage');
+                messageDiv.innerHTML = `<div class="status-message status-${type}">${message}</div>`;
+                setTimeout(() => {
+                    messageDiv.innerHTML = '';
+                }, 5000);
+            }
+
+            setLoading(elementId, iconId, spinnerId, loading) {
+                const element = document.getElementById(elementId);
+                const icon = document.getElementById(iconId);
+                const spinner = document.getElementById(spinnerId);
+
+                element.disabled = loading;
+                if (loading) {
+                    icon.classList.add('d-none');
+                    spinner.classList.remove('d-none');
+                } else {
+                    icon.classList.remove('d-none');
+                    spinner.classList.add('d-none');
+                }
+            }
+
+            async authenticate() {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const country = document.getElementById('country').value;
+                const language = document.getElementById('language').value;
+
+                if (!username || !password) {
+                    this.showMessage('Please enter your LG ThinQ username and password.', 'error');
+                    return;
+                }
+
+                this.setLoading('authenticateBtn', 'authIcon', 'authSpinner', true);
+                this.showMessage('Authenticating with LG ThinQ...', 'info');
+
+                try {
+                    const result = await homebridge.request('/auth', { username, password, country, language });
+
+                    if (result.refresh_token) {
+                        this.refreshToken = result.refresh_token;
+                        document.getElementById('refreshToken').value = result.refresh_token;
+                        document.getElementById('testTokenBtn').disabled = false;
+                        document.getElementById('copyTokenBtn').disabled = false;
+                        document.getElementById('saveConfigBtn').disabled = false;
+                        document.getElementById('deviceSection').style.display = 'block';
+                        this.showMessage('Authentication successful! Refresh token obtained.', 'success');
+                    } else {
+                        this.showMessage(result.error || 'Authentication failed.', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage(`Authentication failed: ${error.message || 'Network error'}`, 'error');
+                } finally {
+                    this.setLoading('authenticateBtn', 'authIcon', 'authSpinner', false);
+                }
+            }
+
+            async testToken() {
+                if (!this.refreshToken) {
+                    this.showMessage('No refresh token to test.', 'error');
+                    return;
+                }
+
+                this.setLoading('testTokenBtn', 'authIcon', 'authSpinner', true);
+                this.showMessage('Testing refresh token...', 'info');
+
+                try {
+                    const result = await homebridge.request('/test-token', {
+                        refresh_token: this.refreshToken,
+                        country: document.getElementById('country').value,
+                        language: document.getElementById('language').value
+                    });
+
+                    if (result.valid) {
+                        this.showMessage('Refresh token is valid and working!', 'success');
+                    } else {
+                        this.showMessage(result.message || 'Token test failed.', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage(`Token test failed: ${error.message || 'Network error'}`, 'error');
+                } finally {
+                    this.setLoading('testTokenBtn', 'authIcon', 'authSpinner', false);
+                }
+            }
+
+            async discoverDevices() {
+                if (!this.refreshToken) {
+                    this.showMessage('Please authenticate first to discover devices.', 'error');
+                    return;
+                }
+
+                this.setLoading('discoverBtn', 'discoverIcon', 'discoverSpinner', true);
+                this.showMessage('Discovering LG ceiling fans...', 'info');
+
+                try {
+                    const result = await homebridge.request('/discover', {
+                        refresh_token: this.refreshToken,
+                        country: document.getElementById('country').value,
+                        language: document.getElementById('language').value
+                    });
+
+                    if (result.devices) {
+                        this.devices = result.devices || [];
+                        this.displayDevices();
+                        this.showMessage(`Found ${this.devices.length} LG devices.`, 'success');
+                    } else {
+                        this.showMessage(result.error || 'Device discovery failed.', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage(`Device discovery failed: ${error.message || 'Network error'}`, 'error');
+                } finally {
+                    this.setLoading('discoverBtn', 'discoverIcon', 'discoverSpinner', false);
+                }
+            }
+
+            displayDevices() {
+                const devicesList = document.getElementById('devicesList');
+
+                if (this.devices.length === 0) {
+                    devicesList.innerHTML = '<p class="text-muted">No devices found.</p>';
+                    return;
+                }
+
+                let html = '<h5>Discovered Devices:</h5>';
+                this.devices.forEach(device => {
+                    const isOnline = device.online;
+                    const statusClass = isOnline ? 'device-online' : 'device-offline';
+                    const statusIcon = isOnline ? 'fas fa-circle text-success' : 'fas fa-circle text-danger';
+
+                    html += `
+                        <div class="device-item ${statusClass}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">
+                                        <i class="fas fa-fan me-2"></i>
+                                        ${device.alias || device.deviceId}
+                                    </h6>
+                                    <p class="mb-1 text-muted">
+                                        <strong>ID:</strong> ${device.deviceId}<br>
+                                        <strong>Type:</strong> ${device.applianceType || 'Unknown'}<br>
+                                        <strong>Model:</strong> ${device.deviceCode || 'Unknown'}
+                                    </p>
+                                </div>
+                                <div class="text-end">
+                                    <i class="${statusIcon}" title="${isOnline ? 'Online' : 'Offline'}"></i>
+                                    <small class="text-muted d-block">${isOnline ? 'Online' : 'Offline'}</small>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                devicesList.innerHTML = html;
+            }
+
+            copyToken() {
+                const tokenInput = document.getElementById('refreshToken');
+                tokenInput.select();
+                navigator.clipboard.writeText(tokenInput.value);
+                this.showMessage('Refresh token copied to clipboard!', 'success');
+            }
+
+            async saveConfiguration() {
+                if (!this.refreshToken) {
+                    this.showMessage('No refresh token to save.', 'error');
+                    return;
+                }
+
+                const configData = {
+                    auth_mode: 'token',
+                    refresh_token: this.refreshToken,
+                    country: document.getElementById('country').value,
+                    language: document.getElementById('language').value,
+                    devices: this.devices.map(device => ({
+                        id: device.deviceId,
+                        name: device.alias,
+                        model: device.applianceType,
+                        max_speed: 4, // LG ceiling fan has 4 speeds: low, med, high, turbo
+                    }))
+                };
+
+                try {
+                    // First, get the configuration structure from the server
+                    const result = await homebridge.request('/config', configData);
+
+                    if (result.success && result.config) {
+                        // Use the homebridge API to save the configuration
+                        this.showMessage('Saving configuration to Homebridge...', 'info');
+
+                        // Update the plugin configuration using the proper Homebridge API
+                        await homebridge.updatePluginConfig([result.config]);
+
+                        // Save the configuration to disk
+                        await homebridge.savePluginConfig();
+
+                        this.showMessage('Configuration saved successfully! Please restart Homebridge to apply changes.', 'success');
+                    } else {
+                        this.showMessage('Failed to prepare configuration.', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage(`Failed to save configuration: ${error.message || 'Unknown error'}`, 'error');
+                }
+            }
+        }
+
+        // Initialize the UI when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new LGCeilingFanUI();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "homebridge-lg-ceilingfan-ui",
+  "version": "1.0.0",
+  "description": "UI server for homebridge-lg-ceilingfan",
+  "main": "server.js",
+  "private": true,
+  "dependencies": {
+    "@homebridge/plugin-ui-utils": "^1.0.3",
+    "axios": "^1.4.0",
+    "luxon": "^3.4.4",
+    "querystring": "^0.2.1"
+  },
+  "engines": {
+    "node": ">=14.18.1"
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "pluginAlias": "LGCeilingFan",
+  "pluginType": "platform",
+  "singular": true,
+  "customUi": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "default": "LG Ceiling Fan",
+        "required": true
+      },
+      "_bridge": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "title": "Bridge Username",
+            "type": "string"
+          }
+        }
+      },
+      "auth_mode": {
+        "title": "Authentication Mode",
+        "type": "string",
+        "default": "token",
+        "oneOf": [
+          { "title": "Refresh Token", "enum": ["token"] },
+          { "title": "Username/Password", "enum": ["account"] }
+        ],
+        "required": true
+      },
+      "refresh_token": {
+        "title": "Refresh Token",
+        "type": "string",
+        "condition": {
+          "functionBody": "return model.auth_mode === 'token';"
+        },
+        "description": "Use the 'Get Refresh Token' button above to obtain this automatically"
+      },
+      "username": {
+        "title": "Username",
+        "type": "string",
+        "condition": {
+          "functionBody": "return model.auth_mode === 'account';"
+        }
+      },
+      "password": {
+        "title": "Password",
+        "type": "string",
+        "condition": {
+          "functionBody": "return model.auth_mode === 'account';"
+        }
+      },
+      "country": {
+        "title": "Country",
+        "type": "string",
+        "default": "US",
+        "required": true,
+        "description": "Your account country alpha-2 code (e.g., US, KR, etc.)"
+      },
+      "language": {
+        "title": "Language",
+        "type": "string",
+        "default": "en-US",
+        "required": true,
+        "description": "Your account language code (e.g., en-US, ko-KR, etc.)"
+      },
+      "devices": {
+        "title": "Devices",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "title": "Device ID",
+              "type": "string",
+              "required": true
+            },
+            "name": {
+              "title": "Device Name",
+              "type": "string",
+              "description": "Custom name for this ceiling fan"
+            },
+            "model": {
+              "title": "Fan Model",
+              "type": "string",
+              "description": "LG ceiling fan model"
+            },
+            "max_speed": {
+              "title": "Maximum Speed",
+              "type": "integer",
+              "default": 4,
+              "minimum": 1,
+              "maximum": 10,
+              "description": "Maximum fan speed supported by your ceiling fan (LG fans use 4 discrete speed steps)"
+            }
+          }
+        }
+      },
+      "polling_interval": {
+        "title": "Polling Interval (seconds)",
+        "type": "integer",
+        "default": 30,
+        "minimum": 10,
+        "maximum": 300,
+        "description": "How often to check device status"
+      },
+      "debug": {
+        "title": "Debug Mode",
+        "type": "boolean",
+        "default": false,
+        "description": "Enable debug logging"
+      }
+    }
+  },
+  "layout": [
+    {
+      "type": "help",
+      "helpvalue": "<div class=\"alert alert-info\"><h5><i class=\"fas fa-info-circle\"></i> Easy Setup</h5><p>Click the button below to automatically get your LG ThinQ refresh token and discover your ceiling fans.</p></div>"
+    },
+    {
+      "key": "name"
+    },
+    {
+      "type": "fieldset",
+      "title": "Authentication",
+      "description": "Use the custom interface below for easy authentication, or configure manually.",
+      "items": [
+        "auth_mode",
+        "refresh_token",
+        "username",
+        "password",
+        "country",
+        "language"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Device Configuration",
+      "description": "Devices can be auto-discovered using the interface above, or configured manually below.",
+      "items": [
+        {
+          "key": "devices",
+          "type": "array",
+          "title": "Ceiling Fans",
+          "items": [
+            "devices[].id",
+            "devices[].name",
+            "devices[].model",
+            "devices[].max_speed"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Advanced Settings",
+      "items": [
+        "polling_interval",
+        "debug"
+      ]
+    }
+  ]
+}
