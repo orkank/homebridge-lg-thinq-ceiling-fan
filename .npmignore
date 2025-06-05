@@ -1,0 +1,42 @@
+# Source files (we only need the compiled dist folder)
+src/
+tsconfig.json
+.eslintrc
+
+# Development and testing files
+test-auth.js
+test-device.js
+examples/
+TESTING_README.md
+nodemon.json
+
+# Git and version control
+.git/
+.gitignore
+.history/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Development dependencies (they're in devDependencies anyway)
+node_modules/
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Temporary folders
+tmp/
+temp/

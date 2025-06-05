@@ -1,8 +1,8 @@
 # Homebridge LG Ceiling Fan
 
 <!-- [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins) -->
-[![npm](https://img.shields.io/npm/v/homebridge-lg-ceilingfan.svg)](https://www.npmjs.com/package/homebridge-lg-ceilingfan)
-[![npm](https://img.shields.io/npm/dt/homebridge-lg-ceilingfan.svg)](https://www.npmjs.com/package/homebridge-lg-ceilingfan)
+[![npm](https://img.shields.io/npm/v/homebridge-lg-ceilingfan.svg)](https://www.npmjs.com/package/homebridge-lg-thinq-ceiling-fan)
+[![npm](https://img.shields.io/npm/dt/homebridge-lg-ceilingfan.svg)](https://www.npmjs.com/package/homebridge-lg-thinq-ceiling-fan)
 
 A Homebridge plugin for controlling LG ceiling fans via the LG ThinQ platform.
 
@@ -28,43 +28,69 @@ A Homebridge plugin for controlling LG ceiling fans via the LG ThinQ platform.
 
 ## Installation
 
-1. Install the plugin via npm:
+You can install this plugin in two ways:
+
+### Option 1: Homebridge Config UI X (Recommended)
+
+1. Install via Homebridge Config UI X by searching for "homebridge-lg-thinq-ceiling-fan"
+2. Configure using the user-friendly setup interface (see Configuration section below)
+
+### Option 2: Manual Installation
+
 ```bash
-npm install -g homebridge-lg-ceilingfan
+npm install -g homebridge-lg-thinq-ceiling-fan
 ```
 
-2. Or install via Homebridge Config UI X by searching for "LG Ceiling Fan"
+## Configuration
 
-## Easy Setup (Recommended)
+### Easy Setup (Recommended)
 
-### Using the Built-in Custom UI
+This plugin includes a custom user interface for easy configuration. After installation:
 
-1. Install the plugin via Homebridge Config UI X
-2. Go to the "Plugins" tab and find "LG Ceiling Fan"
-3. Click the **"Settings"** button
-4. Click **"Plugin Config"** button (this opens the authentication interface)
-5. In the Custom UI:
-   - Select your country code (e.g., US, TR, KR. Must be uppercase)
-   - Select your language code (e.g., en-US, tr-TR, ko-KR)
-   - Enter your LG ThinQ username (email)
-   - Enter your LG ThinQ password
-   - Click **"Login & Get Refresh Token"**
-6. Once authenticated successfully:
-   - Click **"Discover Ceiling Fans"** to find your devices
-   - Click **"Save Configuration"** to apply the settings
-7. Restart Homebridge
+1. Go to Homebridge Config UI X
+2. Navigate to the plugin settings for "LG Ceiling Fan"
+3. Use the authentication interface to:
+   - Enter your LG ThinQ credentials
+   - Automatically obtain refresh token
+   - Discover and configure your ceiling fans
+   - Save configuration with automatic token refresh
 
-The Custom UI will automatically:
-- Authenticate with LG ThinQ using the working authentication flow
-- Generate and save your refresh token
-- Discover your ceiling fans using the correct API calls
-- Configure the plugin settings with the proper device information
+### ⚠️ Important: Child Bridge Warning
 
-**Note**: The Custom UI uses the tested and working LG API commands (airState.operation for power, airState.windStrength for speed control) that were discovered through extensive testing.
+**IMPORTANT NOTICE**: If you move this plugin to a **Child Bridge**, the plugin configuration UI becomes inaccessible and **there is no way to get back to the configuration interface**. This is a known Homebridge issue, not a plugin issue.
 
-## Manual Configuration
+**Before moving to Child Bridge:**
+- ✅ Complete all configuration using the plugin UI while it's still in the main bridge
+- ✅ Test that authentication and device discovery work properly
+- ✅ Ensure all settings are correct and saved
+- ✅ Make note of your refresh token and device IDs
 
-Add the following to your Homebridge `config.json`:
+**If you need to reconfigure after moving to Child Bridge:**
+- You will need to manually edit the `config.json` file
+- Or temporarily move the plugin back to the main bridge to access the UI
+
+**We strongly recommend completing all initial setup before considering Child Bridge separation.**
+
+### Automatic Token Refresh
+
+The plugin supports automatic token refresh to prevent authentication failures:
+
+**Features:**
+- **Auto-Refresh**: Automatically refreshes expired tokens without manual intervention
+- **Credential Storage**: Optionally saves your username/password securely for seamless re-authentication
+- **Fallback Authentication**: If refresh token fails, automatically re-authenticates with stored credentials
+- **Smart Error Handling**: Gracefully handles token expiry and network issues
+
+**Configuration Options:**
+- `auto_refresh`: Enable automatic token refresh (default: true)
+- `save_credentials`: Save username/password for automatic re-authentication (recommended)
+- When enabled, the plugin will automatically handle token expiry without requiring manual intervention
+
+**Security Note:** Credentials are stored securely in your Homebridge configuration and only used for automatic token refresh when needed.
+
+### Manual Configuration
+
+If you prefer to configure manually, add the following to your Homebridge config.json:
 
 ```json
 {
@@ -76,13 +102,16 @@ Add the following to your Homebridge `config.json`:
       "refresh_token": "your_refresh_token_here",
       "country": "US",
       "language": "en-US",
+      "auto_refresh": true,
+      "save_credentials": true,
+      "username": "your_email@example.com",
+      "password": "your_password",
       "devices": [
         {
           "id": "your_device_id",
-          "name": "Master Bedroom Fan",
+          "name": "Living Room Ceiling Fan",
           "model": "LG Ceiling Fan",
-          "enable_light": true,
-          "max_speed": 5
+          "max_speed": 4
         }
       ],
       "polling_interval": 30,
@@ -91,6 +120,19 @@ Add the following to your Homebridge `config.json`:
   ]
 }
 ```
+
+**Configuration Parameters:**
+- `auth_mode`: Authentication method (`"token"` recommended)
+- `refresh_token`: LG ThinQ refresh token (get via Custom UI)
+- `country`: Your country code (e.g., "US", "TR", "KR")
+- `language`: Your language code (e.g., "en-US", "tr-TR", "ko-KR")
+- `auto_refresh`: Enable automatic token refresh (default: true, recommended)
+- `save_credentials`: Save credentials for automatic re-authentication (recommended)
+- `username`: LG ThinQ username/email (required if save_credentials is true)
+- `password`: LG ThinQ password (required if save_credentials is true)
+- `devices`: Array of ceiling fan configurations
+- `polling_interval`: Status update interval in seconds (default: 30)
+- `debug`: Enable debug logging (default: false)
 
 ## Configuration Options
 
@@ -114,6 +156,15 @@ Add the following to your Homebridge `config.json`:
 | `devices[].name` | string | No | Device alias | Custom name for the fan |
 | `devices[].model` | string | No | Device type | Fan model name |
 | `devices[].max_speed` | number | No | 5 | Maximum fan speed (1-10) |
+
+### Auto-Refresh Configuration
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `auto_refresh` | boolean | No | true | Enable automatic token refresh |
+| `save_credentials` | boolean | No | false | Save credentials for automatic re-authentication |
+| `username` | string | If `save_credentials` = true | - | LG ThinQ username for auto-refresh |
+| `password` | string | If `save_credentials` = true | - | LG ThinQ password for auto-refresh |
 
 ### Advanced Options
 
@@ -156,6 +207,23 @@ Use the built-in UI or leave the `devices` array empty:
 - **Speed**: 4 discrete speed steps (Off, Low, Medium, High, Turbo)
 
 ## Troubleshooting
+
+### Token Issues
+
+**Token Expired Error:**
+- Enable `auto_refresh` and `save_credentials` in your configuration
+- If auto-refresh fails, use the Custom UI to get a new refresh token
+- Check your username/password are correct in the configuration
+
+**Authentication Failures:**
+- Verify your LG ThinQ credentials are correct
+- Check your country and language codes match your LG account region
+- Try using the Custom UI to re-authenticate and get a fresh token
+
+**Auto-Refresh Not Working:**
+- Ensure `auto_refresh: true` and `save_credentials: true` in config
+- Verify `username` and `password` are set correctly
+- Check Homebridge logs for authentication error details
 
 ### Common Issues
 

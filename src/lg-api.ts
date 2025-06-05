@@ -10,6 +10,10 @@ export class LGApi {
   private gatewayInfo: GatewayInfo | null = null;
   private country: string;
   private language: string;
+  private tokenObtainedAt: Date | null = null; // Track when token was obtained
+  private lastApiError: Date | null = null; // Track last API error
+  private consecutiveErrors = 0; // Track consecutive API errors
+  private circuitBreakerOpen = false; // Circuit breaker state
 
   constructor(country: string = LG_API_CONSTANTS.DEFAULT_COUNTRY, language: string = LG_API_CONSTANTS.DEFAULT_LANGUAGE) {
     this.country = country;
@@ -178,6 +182,8 @@ export class LGApi {
           // If getUserNumber fails, try to continue without it
           // Note: getUserNumber failure is not critical for basic functionality
         }
+
+        this.tokenObtainedAt = new Date();
 
         return this.authData;
       } else {
@@ -369,6 +375,8 @@ export class LGApi {
       // Step 6: Get user number
       this.authData.userId = await this.getUserNumber();
 
+      this.tokenObtainedAt = new Date();
+
       return this.authData;
     } catch (error) {
       throw new Error(`Credential authentication failed: ${error}`);
@@ -457,6 +465,11 @@ export class LGApi {
         throw new Error('Not authenticated');
       }
 
+      console.log(`[LG API DEBUG] Getting device status for device: ${deviceId}`);
+      console.log(`[LG API DEBUG] Using auth token: ${this.authData.accessToken ?
+        this.authData.accessToken.substring(0, 20) + '...' : 'null'}`);
+      console.log(`[LG API DEBUG] Request URL: ${this.gatewayInfo.thinq2Uri}/service/devices/${deviceId}`);
+
       const response = await this.axiosInstance.get(
         `${this.gatewayInfo.thinq2Uri}/service/devices/${deviceId}`,
         {
@@ -484,9 +497,40 @@ export class LGApi {
         },
       );
 
+      console.log(`[LG API DEBUG] Device status response status: ${response.status}`);
+      console.log('[LG API DEBUG] Device status response data:', JSON.stringify(response.data, null, 2));
+
       return response.data?.result || {};
-    } catch (error) {
-      throw new Error(`Failed to get device status: ${error}`);
+    } catch (error: any) {
+      console.error(`[LG API ERROR] Device status request failed for device ${deviceId}:`);
+      console.error(`[LG API ERROR] Status: ${error.response?.status || 'unknown'}`);
+      console.error(`[LG API ERROR] Status Text: ${error.response?.statusText || 'unknown'}`);
+      console.error('[LG API ERROR] Response Headers:', error.response?.headers || 'none');
+      console.error('[LG API ERROR] Response Data:', JSON.stringify(error.response?.data, null, 2) || 'none');
+      console.error(`[LG API ERROR] Request URL: ${this.gatewayInfo?.thinq2Uri}/service/devices/${deviceId}`);
+      console.error(`[LG API ERROR] Auth token exists: ${!!this.authData?.accessToken}`);
+      console.error(`[LG API ERROR] User ID exists: ${!!this.authData?.userId}`);
+
+      // Enhanced error with specific status codes
+      if (error.response?.status === 400) {
+        throw new Error(`Bad Request (400): ${JSON.stringify(error.response.data) ||
+          'Invalid request format or parameters'}`);
+      } else if (error.response?.status === 401) {
+        throw new Error(`Unauthorized (401): ${JSON.stringify(error.response.data) ||
+          'Authentication token expired or invalid'}`);
+      } else if (error.response?.status === 403) {
+        throw new Error(`Forbidden (403): ${JSON.stringify(error.response.data) ||
+          'Access denied to device'}`);
+      } else if (error.response?.status === 404) {
+        throw new Error(`Not Found (404): Device ${deviceId} not found`);
+      } else if (error.response?.status === 429) {
+        throw new Error('Rate Limited (429): Too many requests, please wait before retrying');
+      } else if (error.response?.status >= 500) {
+        throw new Error(`Server Error (${error.response.status}): LG API server issue - ${
+          JSON.stringify(error.response.data) || 'Internal server error'}`);
+      }
+
+      throw new Error(`Failed to get device status: ${error.message || error}`);
     }
   }
 
@@ -506,6 +550,12 @@ export class LGApi {
         dataKey: command.dataKey,
         dataValue: command.dataValue,
       };
+
+      console.log(`[LG API DEBUG] Sending command to device: ${deviceId}`);
+      console.log('[LG API DEBUG] Command data:', JSON.stringify(requestData, null, 2));
+      console.log(`[LG API DEBUG] Using auth token: ${this.authData.accessToken ?
+        this.authData.accessToken.substring(0, 20) + '...' : 'null'}`);
+      console.log(`[LG API DEBUG] Request URL: ${this.gatewayInfo.thinq2Uri}/service/devices/${deviceId}/control-sync`);
 
       const response = await this.axiosInstance.post(
         `${this.gatewayInfo.thinq2Uri}/service/devices/${deviceId}/control-sync`,
@@ -536,9 +586,41 @@ export class LGApi {
         },
       );
 
+      console.log(`[LG API DEBUG] Command response status: ${response.status}`);
+      console.log('[LG API DEBUG] Command response data:', JSON.stringify(response.data, null, 2));
+
       return response.data?.result || {};
     } catch (error: any) {
-      throw new Error(`Failed to send command: ${error}`);
+      console.error(`[LG API ERROR] Command request failed for device ${deviceId}:`);
+      console.error('[LG API ERROR] Command:', JSON.stringify(command, null, 2));
+      console.error(`[LG API ERROR] Status: ${error.response?.status || 'unknown'}`);
+      console.error(`[LG API ERROR] Status Text: ${error.response?.statusText || 'unknown'}`);
+      console.error('[LG API ERROR] Response Headers:', error.response?.headers || 'none');
+      console.error('[LG API ERROR] Response Data:', JSON.stringify(error.response?.data, null, 2) || 'none');
+      console.error(`[LG API ERROR] Request URL: ${this.gatewayInfo?.thinq2Uri}/service/devices/${deviceId}/control-sync`);
+      console.error(`[LG API ERROR] Auth token exists: ${!!this.authData?.accessToken}`);
+      console.error(`[LG API ERROR] User ID exists: ${!!this.authData?.userId}`);
+
+      // Enhanced error with specific status codes
+      if (error.response?.status === 400) {
+        throw new Error(`Bad Request (400): ${JSON.stringify(error.response.data) ||
+          'Invalid command format or parameters'}`);
+      } else if (error.response?.status === 401) {
+        throw new Error(`Unauthorized (401): ${JSON.stringify(error.response.data) ||
+          'Authentication token expired or invalid'}`);
+      } else if (error.response?.status === 403) {
+        throw new Error(`Forbidden (403): ${JSON.stringify(error.response.data) ||
+          'Access denied to device'}`);
+      } else if (error.response?.status === 404) {
+        throw new Error(`Not Found (404): Device ${deviceId} not found or endpoint not available`);
+      } else if (error.response?.status === 429) {
+        throw new Error('Rate Limited (429): Too many requests, please wait before retrying');
+      } else if (error.response?.status >= 500) {
+        throw new Error(`Server Error (${error.response.status}): LG API server issue - ${
+          JSON.stringify(error.response.data) || 'Internal server error'}`);
+      }
+
+      throw new Error(`Failed to send command: ${error.message || error}`);
     }
   }
 
@@ -551,18 +633,207 @@ export class LGApi {
     }
 
     try {
+      console.log('[LG API DEBUG] Refreshing access token');
       const updatedAuth = await this.authenticateWithToken(this.authData.refreshToken);
       this.authData = updatedAuth;
-    } catch (error) {
-      throw new Error(`Failed to refresh access token: ${error}`);
+      this.tokenObtainedAt = new Date();
+      console.log('[LG API DEBUG] Access token refreshed successfully');
+    } catch (error: any) {
+      console.error('[LG API ERROR] Failed to refresh access token:', error.message);
+      throw new Error(`Failed to refresh access token: ${error.message}`);
     }
   }
 
   /**
-   * Check if authenticated
+   * Auto-refresh tokens using stored credentials if refresh token fails
+   */
+  async autoRefreshWithCredentials(username: string, password: string): Promise<AuthData> {
+    try {
+      console.log('[LG API DEBUG] Starting auto-refresh process');
+
+      // First try to refresh with refresh token
+      if (this.authData?.refreshToken) {
+        try {
+          console.log('[LG API DEBUG] Attempting refresh token renewal');
+          await this.refreshAccessToken();
+          console.log('[LG API DEBUG] Refresh token renewal successful');
+          return this.authData!;
+        } catch (error: any) {
+          console.warn(`[LG API WARN] Refresh token renewal failed: ${error.message}, falling back to credentials`);
+          // If refresh token fails, fall back to username/password
+        }
+      } else {
+        console.log('[LG API DEBUG] No refresh token available, using credentials directly');
+      }
+
+      // Re-authenticate with username/password
+      console.log('[LG API DEBUG] Re-authenticating with username/password');
+      const newAuth = await this.authenticateWithCredentials(username, password);
+      this.authData = newAuth;
+      console.log('[LG API DEBUG] Re-authentication successful');
+      console.log(`[LG API DEBUG] New token expires: ${newAuth.accessToken ? 'exists' : 'missing'}`);
+
+      return newAuth;
+    } catch (error: any) {
+      console.error('[LG API ERROR] Auto-refresh completely failed:', error.message);
+      throw new Error(`Auto-refresh failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Check if token is expired
+   */
+  isTokenExpired(): boolean {
+    if (!this.tokenObtainedAt) {
+      return true; // Token not obtained yet
+    }
+
+    const tokenExpiresInMinutes = 30; // Assuming a default token expiration time
+    const currentTime = new Date();
+    const tokenObtainedTime = new Date(this.tokenObtainedAt);
+    const tokenAge = Math.floor((currentTime.getTime() - tokenObtainedTime.getTime()) / 60000);
+
+    return tokenAge > tokenExpiresInMinutes;
+  }
+
+  /**
+   * Check if circuit breaker should prevent API calls
+   */
+  private isCircuitBreakerOpen(): boolean {
+    if (!this.circuitBreakerOpen) {
+      return false;
+    }
+
+    // Reset circuit breaker after 5 minutes
+    if (this.lastApiError && (new Date().getTime() - this.lastApiError.getTime()) > 5 * 60 * 1000) {
+      console.log('[LG API DEBUG] Circuit breaker reset after 5 minutes');
+      this.circuitBreakerOpen = false;
+      this.consecutiveErrors = 0;
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Record API success
+   */
+  private recordApiSuccess(): void {
+    this.consecutiveErrors = 0;
+    this.circuitBreakerOpen = false;
+    this.lastApiError = null;
+  }
+
+  /**
+   * Record API error
+   */
+  private recordApiError(): void {
+    this.lastApiError = new Date();
+    this.consecutiveErrors++;
+
+    // Open circuit breaker after 5 consecutive errors
+    if (this.consecutiveErrors >= 5) {
+      console.log(`[LG API WARN] Circuit breaker opened due to ${this.consecutiveErrors} consecutive errors`);
+      this.circuitBreakerOpen = true;
+    }
+  }
+
+  /**
+   * Execute API call with automatic token refresh
+   */
+  async executeWithRetry<T>(apiCall: () => Promise<T>, username?: string, password?: string): Promise<T> {
+    // Check circuit breaker
+    if (this.isCircuitBreakerOpen()) {
+      throw new Error('Circuit breaker is open due to consecutive API failures. Service will retry automatically in a few minutes.');
+    }
+
+    try {
+      console.log('[LG API DEBUG] Executing API call with retry capability');
+      console.log(`[LG API DEBUG] Auth token available: ${!!this.authData?.accessToken}`);
+      console.log(`[LG API DEBUG] Refresh token available: ${!!this.authData?.refreshToken}`);
+      console.log(`[LG API DEBUG] Credentials available for fallback: ${!!(username && password)}`);
+      console.log(`[LG API DEBUG] Consecutive errors: ${this.consecutiveErrors}`);
+
+      const result = await apiCall();
+      this.recordApiSuccess(); // Record success
+      return result;
+    } catch (error: any) {
+      this.recordApiError(); // Record error
+
+      const status = error.response?.status;
+      console.error(`[LG API ERROR] API call failed with status: ${status}`);
+      console.error('[LG API ERROR] Error details:', JSON.stringify(error.response?.data, null, 2));
+      console.error(`[LG API ERROR] Consecutive errors: ${this.consecutiveErrors}`);
+
+      // Check if error is due to authentication issues
+      if (status === 401 || status === 403 || status === 400) {
+        console.log(`[LG API DEBUG] Authentication-related error detected (${status}), attempting token refresh`);
+
+        if (username && password) {
+          try {
+            console.log('[LG API DEBUG] Attempting auto-refresh with credentials');
+            await this.autoRefreshWithCredentials(username, password);
+            console.log('[LG API DEBUG] Auto-refresh successful, retrying original API call');
+
+            // Retry the original API call
+            const result = await apiCall();
+            this.recordApiSuccess(); // Record success after retry
+            return result;
+          } catch (refreshError: any) {
+            console.error('[LG API ERROR] Auto-refresh failed:', refreshError.message);
+            throw new Error(`API call failed and auto-refresh failed: ${refreshError.message}`);
+          }
+        } else {
+          console.error('[LG API ERROR] No credentials available for auto-refresh');
+
+          // For HTTP 400 errors, provide more specific guidance
+          if (status === 400) {
+            throw new Error('Bad Request (400): This may indicate expired authentication or invalid request format. ' +
+              `Consider restarting Homebridge to re-authenticate. Original error: ${error.message}`);
+          }
+
+          throw new Error(`Authentication error (${status}) and no credentials available for auto-refresh. ` +
+            `Original error: ${error.message}`);
+        }
+      }
+
+      // For non-authentication errors, throw as-is
+      throw error;
+    }
+  }
+
+  /**
+   * Check if authenticated and token is valid
    */
   isAuthenticated(): boolean {
-    return this.authData !== null && this.authData.accessToken !== '';
+    const hasAuth = this.authData !== null && this.authData.accessToken !== '';
+    const tokenValid = !this.isTokenExpired();
+
+    console.log(`[LG API DEBUG] Authentication check: hasAuth=${hasAuth}, tokenValid=${tokenValid}`);
+    if (this.tokenObtainedAt) {
+      const tokenAge = Math.floor((new Date().getTime() - this.tokenObtainedAt.getTime()) / 60000);
+      console.log(`[LG API DEBUG] Token age: ${tokenAge} minutes`);
+    }
+
+    return hasAuth && tokenValid;
+  }
+
+  /**
+   * Validate current authentication and suggest refresh if needed
+   */
+  async validateAuthentication(): Promise<boolean> {
+    if (!this.authData || !this.authData.accessToken) {
+      console.log('[LG API DEBUG] No authentication data available');
+      return false;
+    }
+
+    if (this.isTokenExpired()) {
+      console.log('[LG API DEBUG] Token appears to be expired, validation suggests refresh needed');
+      return false;
+    }
+
+    console.log('[LG API DEBUG] Authentication appears valid');
+    return true;
   }
 
   /**

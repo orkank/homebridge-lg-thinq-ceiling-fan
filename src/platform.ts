@@ -31,15 +31,18 @@ export class LGCeilingFanPlatform implements DynamicPlatformPlugin {
     }
 
     // Initialize LG API
-    this.lgApi = new LGApi(
-      this.config.country || 'US',
-      this.config.language || 'en-US',
-    );
+    this.lgApi = new LGApi(this.config.country, this.config.language);
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
+    // Dynamic Platform plugins should only register new accessories after this event was fired,
+    // in order to ensure they weren't added to homebridge already. This event can also be used
+    // to start discovery of new accessories.
     this.api.on('didFinishLaunching', () => {
       this.log.debug('Executed didFinishLaunching callback');
       this.discoverDevices();
+
+      // Start authentication health monitoring
+      this.startAuthenticationHealthCheck();
     });
   }
 
@@ -107,18 +110,69 @@ export class LGCeilingFanPlatform implements DynamicPlatformPlugin {
   }
 
   /**
+   * Authenticate with auto-refresh support
+   */
+  private async authenticateWithAutoRefresh(): Promise<boolean> {
+    try {
+      this.log.info('Authenticating with LG ThinQ API...');
+
+      if (this.config.auth_mode === 'token') {
+        // Use auto-refresh if credentials are saved
+        if (this.config.auto_refresh !== false && this.config.save_credentials && this.config.username && this.config.password) {
+          this.log.debug('Auto-refresh enabled with saved credentials');
+          await this.lgApi.autoRefreshWithCredentials(this.config.username, this.config.password);
+        } else {
+          // Standard token authentication
+          await this.lgApi.authenticateWithToken(this.config.refresh_token!);
+        }
+      } else {
+        await this.lgApi.authenticateWithCredentials(this.config.username!, this.config.password!);
+      }
+
+      this.isAuthenticated = true;
+      this.log.info('Successfully authenticated with LG ThinQ API');
+
+      // Save updated refresh token if it changed
+      const authData = this.lgApi.getAuthData();
+      if (authData && authData.refreshToken !== this.config.refresh_token) {
+        this.log.debug('Refresh token updated');
+        // Note: In a real implementation, you might want to update the config file
+        // This would require filesystem access which should be done carefully
+      }
+
+      return true;
+    } catch (error) {
+      this.log.error('Failed to authenticate with LG ThinQ API:', error);
+      this.isAuthenticated = false;
+      return false;
+    }
+  }
+
+  /**
+   * Execute API call with auto-retry on token expiry
+   */
+  private async executeWithAutoRefresh<T>(apiCall: () => Promise<T>): Promise<T> {
+    if (!this.config.auto_refresh || !this.config.save_credentials || !this.config.username || !this.config.password) {
+      // No auto-refresh configured, just execute normally
+      return await apiCall();
+    }
+
+    return await this.lgApi.executeWithRetry(apiCall, this.config.username, this.config.password);
+  }
+
+  /**
    * Discover devices and create accessories
    */
   async discoverDevices() {
     try {
-      // Authenticate first
-      if (!await this.authenticate()) {
+      // Authenticate first (with auto-refresh support)
+      if (!await this.authenticateWithAutoRefresh()) {
         this.log.error('Authentication failed. Cannot discover devices.');
         return;
       }
 
-      // Get devices from LG API
-      const devices = await this.lgApi.getDevices();
+      // Get devices from LG API (with auto-refresh support)
+      const devices = await this.executeWithAutoRefresh(() => this.lgApi.getDevices());
       this.log.info(`Found ${devices.length} devices from LG ThinQ API`);
 
       // Filter devices based on configuration
@@ -268,5 +322,63 @@ export class LGCeilingFanPlatform implements DynamicPlatformPlugin {
    */
   get platformConfig(): LGCeilingFanConfig {
     return this.config;
+  }
+
+  /**
+   * Get LG API instance (with auto-refresh support for accessories)
+   */
+  getLgApi(): LGApi {
+    return this.lgApi;
+  }
+
+  /**
+   * Execute API call with auto-refresh (public method for accessories)
+   */
+  async executeApiWithAutoRefresh<T>(apiCall: () => Promise<T>): Promise<T> {
+    return await this.executeWithAutoRefresh(apiCall);
+  }
+
+  /**
+   * Start authentication health monitoring
+   */
+  private startAuthenticationHealthCheck() {
+    if (!this.config.auto_refresh || !this.config.save_credentials) {
+      this.log.info('Authentication health monitoring disabled (auto_refresh or save_credentials not enabled)');
+      return;
+    }
+
+    const healthCheckInterval = 15 * 60 * 1000; // Check every 15 minutes
+
+    setInterval(async () => {
+      try {
+        console.log('[Platform DEBUG] Running authentication health check');
+
+        if (!this.lgApi.isAuthenticated()) {
+          console.log('[Platform DEBUG] Authentication appears invalid, attempting refresh');
+          this.log.warn('Authentication token appears expired, attempting auto-refresh');
+
+          if (this.config.username && this.config.password) {
+            try {
+              await this.lgApi.autoRefreshWithCredentials(this.config.username, this.config.password);
+              this.log.info('Authentication auto-refresh successful');
+              console.log('[Platform DEBUG] Authentication health check: refresh successful');
+            } catch (error: any) {
+              this.log.error(`Authentication auto-refresh failed: ${error.message}`);
+              console.error('[Platform ERROR] Authentication health check failed:', error.message);
+            }
+          } else {
+            this.log.error('Authentication invalid but no credentials available for auto-refresh');
+          }
+        } else {
+          console.log('[Platform DEBUG] Authentication health check: token appears valid');
+        }
+
+      } catch (error: any) {
+        console.error('[Platform ERROR] Authentication health check error:', error.message);
+        this.log.error(`Authentication health check error: ${error.message}`);
+      }
+    }, healthCheckInterval);
+
+    this.log.info(`Started authentication health monitoring (checking every ${healthCheckInterval / 60000} minutes)`);
   }
 }

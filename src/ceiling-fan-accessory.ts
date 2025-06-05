@@ -15,6 +15,10 @@ export class LGCeilingFanAccessory {
     maxSpeed: 4, // LG ceiling fan has 4 speeds: low(2), med(4), high(6), turbo(7)
   };
 
+  private lastSpeedCommand: { percentage: number; timestamp: number } | null = null;
+  private lastPowerCommand: { isOn: boolean; timestamp: number } | null = null;
+  private readonly commandThrottleMs = 1000; // Prevent duplicate commands within 1 second
+
   constructor(
     private readonly platform: LGCeilingFanPlatform,
     private readonly accessory: PlatformAccessory,
@@ -64,17 +68,41 @@ export class LGCeilingFanAccessory {
    */
   async setOn(value: CharacteristicValue) {
     const isOn = value as boolean;
+    const now = Date.now();
+
+    // Check if this is a duplicate command within the throttle window
+    if (this.lastPowerCommand &&
+        this.lastPowerCommand.isOn === isOn &&
+        (now - this.lastPowerCommand.timestamp) < this.commandThrottleMs) {
+      console.log(`[Fan Accessory DEBUG] Throttling duplicate power command: ${isOn ? 'ON' : 'OFF'} (within ${this.commandThrottleMs}ms)`);
+      return;
+    }
+
+    // Record this command
+    this.lastPowerCommand = { isOn, timestamp: now };
 
     try {
-      // Send command to LG API using working command structure
-      await this.lgApi.sendCommand(this.config.id, {
-        dataKey: 'airState.operation',
-        dataValue: isOn ? 1 : 0,
-      });
+      console.log(`[Fan Accessory DEBUG] Setting power to: ${isOn ? 'ON' : 'OFF'}`);
+
+      // Validate authentication before making API call
+      const isAuthValid = await this.lgApi.validateAuthentication();
+      if (!isAuthValid) {
+        console.log('[Fan Accessory DEBUG] Authentication validation failed, will attempt refresh during API call');
+      }
+
+      // Send command to LG API using working command structure with auto-refresh
+      await this.platform.executeApiWithAutoRefresh(() =>
+        this.lgApi.sendCommand(this.config.id, {
+          dataKey: 'airState.operation',
+          dataValue: isOn ? 1 : 0,
+        }),
+      );
 
       this.fanStatus.isOn = isOn;
+      console.log(`[Fan Accessory DEBUG] Successfully set power: ${isOn ? 'ON' : 'OFF'}`);
       this.platform.log.info(`Set fan power: ${isOn ? 'ON' : 'OFF'}`);
-    } catch (error) {
+    } catch (error: any) {
+      console.error('[Fan Accessory ERROR] Failed to set power:', error.message);
       this.platform.log.error(`Failed to set fan power: ${error}`);
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
@@ -94,6 +122,21 @@ export class LGCeilingFanAccessory {
    */
   async setRotationSpeed(value: CharacteristicValue) {
     const percentage = value as number;
+    const now = Date.now();
+
+    console.log(`[Fan Accessory DEBUG] === START setRotationSpeed(${percentage}%) ===`);
+
+    // Check if this is a duplicate command within the throttle window
+    if (this.lastSpeedCommand &&
+        this.lastSpeedCommand.percentage === percentage &&
+        (now - this.lastSpeedCommand.timestamp) < this.commandThrottleMs) {
+      console.log(`[Fan Accessory DEBUG] Throttling duplicate speed command: ${percentage}% (within ${this.commandThrottleMs}ms)`);
+      console.log('[Fan Accessory DEBUG] === END setRotationSpeed (throttled) ===');
+      return;
+    }
+
+    // Record this command
+    this.lastSpeedCommand = { percentage, timestamp: now };
 
     // Map discrete percentage steps to LG speed levels using working values
     let lgSpeed: number;
@@ -117,6 +160,14 @@ export class LGCeilingFanAccessory {
     }
 
     try {
+      console.log(`[Fan Accessory DEBUG] Setting speed to ${actualPercentage}% (LG Level: ${lgSpeed})`);
+
+      // Validate authentication before making API call
+      const isAuthValid = await this.lgApi.validateAuthentication();
+      if (!isAuthValid) {
+        console.log('[Fan Accessory DEBUG] Authentication validation failed, will attempt refresh during API call');
+      }
+
       this.platform.log.info(`Setting fan speed to ${actualPercentage}% (LG Level: ${lgSpeed})`);
 
       // Use the working command structure discovered in testing
@@ -125,18 +176,27 @@ export class LGCeilingFanAccessory {
         dataValue: lgSpeed,
       };
 
-      await this.lgApi.sendCommand(this.config.id, command);
+      console.log('[Fan Accessory DEBUG] About to call platform.executeApiWithAutoRefresh');
+      await this.platform.executeApiWithAutoRefresh(() =>
+        this.lgApi.sendCommand(this.config.id, command),
+      );
+      console.log('[Fan Accessory DEBUG] platform.executeApiWithAutoRefresh completed');
 
       this.fanStatus.fanSpeed = actualPercentage;
 
       // If setting speed > 0, also turn on the fan
       if (lgSpeed > 0 && !this.fanStatus.isOn) {
+        console.log('[Fan Accessory DEBUG] Speed > 0, turning on fan...');
         this.platform.log.info('Fan speed > 0, turning on fan...');
         await this.setOn(true);
       }
 
+      console.log(`[Fan Accessory DEBUG] Successfully set speed: ${actualPercentage}% (LG Level: ${lgSpeed})`);
+      console.log('[Fan Accessory DEBUG] === END setRotationSpeed (success) ===');
       this.platform.log.info(`Successfully set fan speed: ${actualPercentage}% (LG Level: ${lgSpeed})`);
-    } catch (error) {
+    } catch (error: any) {
+      console.error('[Fan Accessory ERROR] Failed to set speed:', error.message);
+      console.log('[Fan Accessory DEBUG] === END setRotationSpeed (error) ===');
       this.platform.log.error(`Failed to set fan speed: ${error}`);
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
@@ -155,12 +215,28 @@ export class LGCeilingFanAccessory {
    */
   async updateStatus(): Promise<void> {
     try {
-      const status = await this.lgApi.getDeviceStatus(this.config.id);
+      console.log(`[Fan Accessory DEBUG] Starting status update for device: ${this.config.id}`);
+
+      // Validate authentication before making API call
+      const isAuthValid = await this.lgApi.validateAuthentication();
+      if (!isAuthValid) {
+        console.log('[Fan Accessory DEBUG] Authentication validation failed, will attempt refresh during API call');
+      }
+
+      const status = await this.platform.executeApiWithAutoRefresh(() =>
+        this.lgApi.getDeviceStatus(this.config.id),
+      );
 
       // Parse fan status from LG API response
       const snapshot = status?.snapshot || {};
       const airState = snapshot['airState.operation'] || snapshot.operation;
       const windStrength = snapshot['airState.windStrength'] || snapshot.windStrength;
+
+      console.log('[Fan Accessory DEBUG] Raw device status:', JSON.stringify({
+        airState,
+        windStrength,
+        fullSnapshot: snapshot,
+      }, null, 2));
 
       // Update power status
       this.fanStatus.isOn = airState === 1 || airState === '1';
@@ -190,11 +266,14 @@ export class LGCeilingFanAccessory {
         }
       }
 
+      console.log(`[Fan Accessory DEBUG] Parsed status: Power=${this.fanStatus.isOn}, Speed=${this.fanStatus.fanSpeed}%`);
+
       if (this.platform.config.debug) {
         this.platform.log.debug(`Status updated: Power=${this.fanStatus.isOn}, Speed=${this.fanStatus.fanSpeed}%`);
       }
 
-    } catch (error) {
+    } catch (error: any) {
+      console.error('[Fan Accessory ERROR] Status update failed:', error.message);
       this.platform.log.error(`Failed to update device status: ${error}`);
     }
   }

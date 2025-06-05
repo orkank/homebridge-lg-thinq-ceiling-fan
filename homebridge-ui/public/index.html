@@ -72,7 +72,7 @@
                     <div class="mb-3">
                         <label for="country" class="form-label">Country Code</label>
                         <input type="text" class="form-control" id="country" value="US" placeholder="e.g., US, TR, KR" required>
-                        <div class="form-text">Enter your country code (2 letters, must be uppercase)</div>
+                        <div class="form-text">Enter your country code (2 letters)</div>
                     </div>
                 </div>
                 <div class="col-md-6">
@@ -95,6 +95,18 @@
                     <div class="mb-3">
                         <label for="password" class="form-label">LG ThinQ Password</label>
                         <input type="password" class="form-control" id="password" placeholder="Your password" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="saveCredentials" checked>
+                    <label class="form-check-label" for="saveCredentials">
+                        <strong>Save credentials for automatic token refresh</strong>
+                    </label>
+                    <div class="form-text">
+                        Recommended: Securely save your username/password so the plugin can automatically refresh expired tokens without manual intervention.
                     </div>
                 </div>
             </div>
@@ -373,11 +385,19 @@
                     return;
                 }
 
+                const saveCredentials = document.getElementById('saveCredentials').checked;
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+
                 const configData = {
                     auth_mode: 'token',
                     refresh_token: this.refreshToken,
                     country: document.getElementById('country').value,
                     language: document.getElementById('language').value,
+                    auto_refresh: true,
+                    save_credentials: saveCredentials,
+                    username: saveCredentials ? username : '',
+                    password: saveCredentials ? password : '',
                     devices: this.devices.map(device => ({
                         id: device.deviceId,
                         name: device.alias,
@@ -400,7 +420,11 @@
                         // Save the configuration to disk
                         await homebridge.savePluginConfig();
 
-                        this.showMessage('Configuration saved successfully! Please restart Homebridge to apply changes.', 'success');
+                        const credentialMsg = saveCredentials ?
+                            ' Credentials saved for automatic token refresh.' :
+                            ' Note: Credentials not saved - you may need to manually refresh tokens when they expire.';
+
+                        this.showMessage('Configuration saved successfully! Please restart Homebridge to apply changes.' + credentialMsg, 'success');
                     } else {
                         this.showMessage('Failed to prepare configuration.', 'error');
                     }

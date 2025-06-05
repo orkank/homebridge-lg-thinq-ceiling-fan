@@ -34,6 +34,8 @@ export interface LGCeilingFanConfig {
   password?: string;
   country: string;
   language: string;
+  auto_refresh?: boolean; // Enable automatic token refresh
+  save_credentials?: boolean; // Save credentials for auto-refresh
   devices: DeviceConfig[];
   polling_interval?: number;
   debug?: boolean;

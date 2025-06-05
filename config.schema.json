@@ -39,19 +39,36 @@
         },
         "description": "Use the 'Get Refresh Token' button above to obtain this automatically"
       },
+      "auto_refresh": {
+        "title": "Auto-Refresh Tokens",
+        "type": "boolean",
+        "default": true,
+        "description": "Automatically refresh expired tokens using stored credentials"
+      },
+      "save_credentials": {
+        "title": "Save Credentials for Auto-Refresh",
+        "type": "boolean",
+        "default": false,
+        "condition": {
+          "functionBody": "return model.auth_mode === 'token' && model.auto_refresh;"
+        },
+        "description": "Save username/password securely for automatic token refresh (recommended)"
+      },
       "username": {
         "title": "Username",
         "type": "string",
         "condition": {
-          "functionBody": "return model.auth_mode === 'account';"
-        }
+          "functionBody": "return model.auth_mode === 'account' || (model.auth_mode === 'token' && model.auto_refresh && model.save_credentials);"
+        },
+        "description": "LG ThinQ username/email (saved securely for auto-refresh)"
       },
       "password": {
         "title": "Password",
         "type": "string",
         "condition": {
-          "functionBody": "return model.auth_mode === 'account';"
-        }
+          "functionBody": "return model.auth_mode === 'account' || (model.auth_mode === 'token' && model.auto_refresh && model.save_credentials);"
+        },
+        "description": "LG ThinQ password (saved securely for auto-refresh)"
       },
       "country": {
         "title": "Country",
@@ -130,6 +147,8 @@
       "items": [
         "auth_mode",
         "refresh_token",
+        "auto_refresh",
+        "save_credentials",
         "username",
         "password",
         "country",

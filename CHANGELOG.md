@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-01-06
+
+### Fixed
+- **🔧 HTTP 400 Bad Request Errors**: Resolved authentication issues that caused sporadic API failures
+  - Enhanced token lifecycle management with automatic expiry detection
+  - Implemented circuit breaker pattern to prevent cascading failures
+  - Added comprehensive authentication validation before API calls
+  - Improved error handling with specific status code detection (400, 401, 403, 404, 429, 5xx)
+  - Enhanced debugging with detailed request/response logging
+
+- **🔄 Duplicate Command Execution**: Fixed issue where fan commands were sent twice
+  - Implemented intelligent request throttling to prevent identical commands within 1-second window
+  - Added command tracking with timestamps to filter duplicate requests
+  - Enhanced debugging with stack traces and execution flow tracking
+  - Preserved all error handling and authentication features
+
+### Added
+- **📊 Enhanced Debugging**: Comprehensive logging system for troubleshooting
+  - Detailed LG API request/response logging
+  - Authentication state monitoring
+  - Circuit breaker status tracking
+  - Command execution flow tracing
+  - Stack trace identification for API calls
+
+- **🛡️ Robust Error Recovery**: Auto-recovery mechanisms for common issues
+  - Automatic authentication refresh on token expiry
+  - Circuit breaker with 5-minute auto-recovery
+  - Proactive token validation
+  - Enhanced error context with device/operation identification
+
+- **📖 Documentation**: Added comprehensive troubleshooting guide
+  - `DEBUGGING_IMPROVEMENTS.md` with detailed explanations
+  - Log examples and interpretation guide
+  - Recovery procedures for common issues
+  - Child Bridge configuration warnings
+
+### Improved
+- **🔐 Authentication Reliability**: More stable connection to LG ThinQ API
+  - Periodic authentication health checks every 15 minutes
+  - Enhanced token refresh logic
+  - Better handling of authentication edge cases
+
+- **⚡ Performance**: Reduced unnecessary API calls and improved responsiveness
+  - Smart command throttling without blocking legitimate requests
+  - Optimized status update cycles
+  - Better resource management
+
 ## [1.1.0] - 2025-01-01
 
 ### Added

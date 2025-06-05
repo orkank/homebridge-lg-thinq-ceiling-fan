@@ -632,6 +632,10 @@ class LGCeilingFanUiServer extends HomebridgePluginUiServer {
           refresh_token: config.refresh_token,
           country: config.country || 'US',
           language: config.language || 'en-US',
+          auto_refresh: config.auto_refresh !== false, // Default to true
+          save_credentials: config.save_credentials || false,
+          username: config.save_credentials ? (config.username || '') : '',
+          password: config.save_credentials ? (config.password || '') : '',
           devices: config.devices || [],
           polling_interval: 30,
           debug: false,
