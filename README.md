@@ -1,8 +1,8 @@
 # Homebridge LG Ceiling Fan
 
-<!-- [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins) -->
-[![npm](https://img.shields.io/npm/v/homebridge-lg-ceilingfan.svg)](https://www.npmjs.com/package/homebridge-lg-thinq-ceiling-fan)
-[![npm](https://img.shields.io/npm/dt/homebridge-lg-ceilingfan.svg)](https://www.npmjs.com/package/homebridge-lg-thinq-ceiling-fan)
+
+![version](https://img.shields.io/npm/v/homebridge-lg-thinq-ceiling-fan/latest?label=latest) ![NPM Downloads](https://img.shields.io/npm/d18m/homebridge-lg-thinq-ceiling-fan?label=npm%20downloads)
+
 
 A Homebridge plugin for controlling LG ceiling fans via the LG ThinQ platform.
 
